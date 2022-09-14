@@ -4,60 +4,118 @@ using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
 using System.Diagnostics;
 using System.Net;
+using System.Text;
 
 internal class Program
 {
     private static void Main(string[] args)
     {
+        List<Subject> predmety = new List<Subject>();
         Console.WriteLine("Start!");
+        Console.WriteLine("Zadejte argumenty nebo zmáčkněte enter:");
+        string[] userData = { "", "" };
+        string sem = "";
+        int numero = 0;
+        bool skip = false;
+        try //fast-start
+        {
+            string argumenty = Console.ReadLine();
+            var argument = argumenty.Split("-");
+            foreach (string arg in argument)
+            {
+                var cmm = arg.Split(" ");
+                switch (cmm[0])
+                {
+                    case "u": //uzivatel
+                        userData[0] = cmm[1];
+                        break;
+                    case "p": //heslo
+                        userData[1] = cmm[1];
+                        break;
+                    case "b": //test
+                        numero = 30;
+                        break;
+                    case "s": //semestr
+                        sem = cmm[1];
+                        break;
+                    case "count": //počet předmětů
+                        int.TryParse(cmm[1], out numero);
+                        break;
+                    case "skip":
+                        skip = true;
+                        break;
+                }
+            }
+        }
+        catch (Exception) { }
+
         ChromeDriver cd = new ChromeDriver();
         try
         {
             cd.Url = @"https://new.kos.cvut.cz/login";
             cd.Navigate();
-            Thread.Sleep(1000);
-            IWebElement e = cd.FindElement(By.Id("username"));
-            Console.Clear();
-            Console.WriteLine("Zadejte přihlašovají jméno:");
-            e.SendKeys(Console.ReadLine());
-            e = cd.FindElement(By.Id("password"));
-            Console.WriteLine("Heslo:");
-            e.SendKeys(Console.ReadLine());
-            Console.Clear();
-            IList<IWebElement> webs = cd.FindElements(By.TagName("button"));
-            foreach (IWebElement web in webs)
+            if (skip)
             {
-                if (web.Text == "PŘIHLÁSIT")
-                    e = web;
+                while (cd.Url == @"https://new.kos.cvut.cz/login")
+                    Thread.Sleep(1000);
             }
-            e.Click();
-        } catch (Exception ex)
+            else
+            {
+                Thread.Sleep(1000);
+                IWebElement e = cd.FindElement(By.Id("username"));
+                Console.Clear();
+                if (userData[0].Length < 3)
+                {
+                    Console.WriteLine("Zadejte přihlašovají jméno:");
+                    e.SendKeys(Console.ReadLine());
+                }
+                else { e.SendKeys(userData[0]); }
+                e = cd.FindElement(By.Id("password"));
+                if (userData[1].Length < 8)
+                {
+                    Console.WriteLine("Heslo:");
+                    e.SendKeys(Console.ReadLine());
+                }
+                else { e.SendKeys(userData[1]); }
+                Console.Clear();
+                e = cd.FindElement(By.CssSelector("button[data-testid='button-login']"));
+                e.Click();
+            }
+        }
+        catch (Exception ex)
         {
             Console.WriteLine("Chyba: " + ex.Message);
         }
-        Thread.Sleep(200);
-        if (cd.Url != @"https://new.kos.cvut.cz/login")
-        {
-            Console.WriteLine("Logged in");
-        }
-        else
-        {
-            cd.Url = @"https://new.kos.cvut.cz/login";
-            cd.Navigate();
-            Thread.Sleep(1000);
-            IWebElement e = cd.FindElement(By.Id("username"));
-            Console.Clear();
-            Console.WriteLine("Zkuste to znovu\nZadejte přihlašovají jméno:");
-            e.SendKeys(Console.ReadLine());
-            e = cd.FindElement(By.Id("password"));
-            Console.WriteLine("Heslo:");
-            e.SendKeys(Console.ReadLine());
-            Console.Clear();
-        }
+        Thread.Sleep(1500);
+        if (cd.Url == @"https://new.kos.cvut.cz/login")
+            try //druhý pokus
+            {
+                cd.Url = @"https://new.kos.cvut.cz/login";
+                cd.Navigate();
+                Thread.Sleep(1000);
+                IWebElement e = cd.FindElement(By.Id("username"));
+                Console.Clear();
+                Console.WriteLine("Zkuste to znovu\nZadejte přihlašovají jméno:");
+                e.SendKeys(Console.ReadLine());
+                e = cd.FindElement(By.Id("password"));
+                Console.WriteLine("Heslo:");
+                e.SendKeys(Console.ReadLine());
+                Console.Clear();
+                e = cd.FindElement(By.CssSelector("button[data-testid='button-login']"));
+                e.Click();
+                Thread.Sleep(1500);
+            }
+            catch (NoSuchElementException) { }
 
+        if (cd.Url == @"https://new.kos.cvut.cz/login")
+        {
+            cd.Close();
+            return;
+        }
+        Console.WriteLine("Přihlášen");
+
+        //Cookies
         CookieContainer cc = new CookieContainer();
-
-        //Get the cookies
         foreach (OpenQA.Selenium.Cookie c in cd.Manage().Cookies.AllCookies)
         {
             string name = c.Name;
@@ -65,124 +123,127 @@ internal class Program
             cc.Add(new System.Net.Cookie(name, value, c.Path, c.Domain));
         }
 
+        //Zapisování ID předmětů
         Thread.Sleep(1000);
         cd.Url = @"https://new.kos.cvut.cz/course-register";
         cd.Navigate();
         Thread.Sleep(1000);
         IWebElement element = cd.FindElement(By.TagName("html"));
         IList<IWebElement> nums = cd.FindElement(By.ClassName("pagination")).FindElements(By.ClassName("page-item"));
-        foreach (IWebElement num in nums)
+        foreach (IWebElement num in nums)//přepnutí na num 100
         {
             if (num.Text.Equals("100"))
                 element = num;
         }
+        Console.WriteLine("Načítám předměty...");
         Thread.Sleep(1000);
         element.Click();
-        Console.WriteLine("Načítám...");
         Thread.Sleep(7000);
-
-        IList<IWebElement> dummy = cd.FindElements(By.TagName("li"));
+        IList<IWebElement> dummy = cd.FindElements(By.CssSelector("li[class='page-item align-self-center']"));
         List<IWebElement> pages = new List<IWebElement>();
-        foreach (IWebElement page in dummy)
-        {
-            int temp = 1000;
-            int.TryParse(page.Text, out temp);
-            if (temp <= 0)
-                continue;
-            if (temp <= 4)
+        foreach (IWebElement page in dummy)//Stránky
+            try
             {
-                pages.Add(page);
+                pages.Add(page.FindElement(By.TagName("button")));
             }
-        }
-
+            catch (NoSuchElementException) { }
+        pages.Add(cd.FindElement(By.TagName("html")));
         List<string> ids = new List<string>();
-
-        for (int it = 1; it <= 4; it++)
+        foreach (var page in pages)
         {
-            IList<IWebElement> subjects = cd.FindElement(By.TagName("tbody")).FindElements(By.TagName("tr"));
+            IList<IWebElement> subjects = cd.FindElement(By.TagName("tbody")).FindElements(By.CssSelector("a[class='link-room text-nowrap']"));
             foreach (IWebElement subject in subjects)
-            {
-                var items = subject.Text.Split("\n");
-                if (items.Length > 3)
-                    ids.Add(items[0]);
-            }
-            if (it != 4)
-                pages[it].Click();
+                ids.Add(subject.Text);
+            Console.WriteLine("Zapsáno IDs: {0}", ids.Count);
+            if (page.TagName == "html")
+                continue;
+            if (numero == 30)
+                break;
+            page.Click();
             Thread.Sleep(5000);
         }
-        Console.WriteLine("Zapsáno IDs: " + ids.Count);
-        Console.WriteLine("Vyber semestr: B221 (B-Rok-pololetí)");
-        var sem = Console.ReadLine();
 
+        if (sem == "")
+        {
+            Console.WriteLine("Vyber semestr: B221 (B-Rok-pololetí)");
+            sem = Console.ReadLine().ToUpper();
+            if (sem is null)
+                sem = "B221";
+        }
+
+        if (numero == 0)
+            numero = ids.Count;
         //AutoReading
-        List<Subject> predmety = new List<Subject>();
-        for (int i = 0; i < ids.Count; i++)
+        for (int i = 0; i < numero; i++)
         {
             cd.Url = @$"https://new.kos.cvut.cz/course-syllabus/{ids[i]}/{sem}";
             cd.Navigate();
             Thread.Sleep(500);
             try
             {
-                IList<IWebElement> names = cd.FindElements(By.CssSelector("div[data-testid='name']"));
-                string nameE = "";
-                foreach (IWebElement namet in names)
-                {
-                    try
-                    {
-                        if (namet.Text.Contains("Název:"))
-                            nameE = namet.Text.Replace("Název:", "");
-                    }
-                    catch (Exception ex) {
-                        Console.WriteLine(ex.Message);
-                    }
-                    Console.WriteLine(nameE);
-                }
-                IList<IWebElement> elements = cd.FindElement(By.TagName("tbody")).FindElements(By.TagName("tr"));
-                bool pred = false; //Bool přednášky (závislost)
-                foreach (IWebElement webElement in elements)
-                {
-                    if (webElement.Text.Length < 3)
-                        continue;
-                    var items = webElement.Text.Split("\n");
-                    if (items.Length > 5)
-                    {
-                        if (items[1].StartsWith("P"))
-                            pred = true;
-                        if (items[1].StartsWith("C") || items[1].StartsWith("P")){
-                            var itemT = items[3];
-                            var teach = items[4];
-                            if (items[4].StartsWith("("))
-                            {
-                                itemT += " " + items[4];
-                                teach = items[5];
-                            }
-                            if (pred)
-                                itemT = "*" + itemT;
-                            items[0].Replace("\n", "");
-                            items[1].Replace("\n", "");
-                            itemT.Replace("\n", "");
-                            teach.Replace("\n", "");
-                            ids[i].Replace("\n", "");
-                            predmety.Add(new Subject(nameE, itemT, ids[i], items[1], teach, int.Parse(items[0]))); 
-                        }
-                    }
+                string nameE = cd.FindElement(By.CssSelector("div[data-testid='name']")).FindElement(By.CssSelector("span[class='attribute-value']")).Text;
+                Console.WriteLine($"\n\n{i + 1}/{numero} - {nameE}");
 
+                bool pred = cd.FindElement(By.CssSelector("div[data-testid='extent']")).Text.Contains("P"); ;
+                IList<IWebElement> elements = cd.FindElement(By.CssSelector("div[data-testid='parallels']")).FindElements(By.CssSelector("tr[class='row-headline collapsed']"));
+                if (elements.Count > 0)
+                {
+                    int pocet = 0;
+                    foreach (IWebElement webElement in elements)
+                    {
+                        IWebElement tempElement = webElement.FindElement(By.CssSelector("td[data-testid='parallel-number']")).FindElement(By.CssSelector("div[class='cell-content']"));
+                        int par = 0;
+                        string[] items = new string[5];
+                        int.TryParse(tempElement.Text, out par);
+                        tempElement = webElement.FindElement(By.CssSelector("td[data-testid='parallel-type']")).FindElement(By.CssSelector("div[class='cell-content']"));
+
+                        if (pred && !tempElement.Text.StartsWith("P"))
+                            items[0] = "*";
+                        items[0] += tempElement.Text;
+                        if (items[0].StartsWith("P"))
+                            pred = true;
+                        tempElement = webElement.FindElement(By.CssSelector("td[data-testid='occupied-capacity']")).FindElement(By.CssSelector("div[class='cell-content']"));
+                        items[3] = tempElement.Text;
+                        tempElement = webElement.FindElement(By.CssSelector("td[data-testid='timetables']")).FindElement(By.CssSelector("div[data-testid='parallel-time']"));
+                        items[1] = tempElement.Text;
+                        try
+                        {
+                            tempElement = webElement.FindElement(By.CssSelector("td[data-testid='timetables']")).FindElement(By.CssSelector("div[data-testid='parallel-week']"));
+                            items[1] += " " + tempElement.Text;
+                        }
+                        catch (NoSuchElementException ex) { Debug.WriteLine(ex.Message, "Week"); }
+                        var tempElements = webElement.FindElement(By.CssSelector("td[data-testid='timetables']")).FindElements(By.CssSelector("a[data-testid='parallel-teacher']"));
+                        if (tempElements.Count > 0)
+                        {
+                            foreach (IWebElement we in tempElements)
+                                items[2] += we.Text + ",";
+                            items[2] = items[2].Remove(items[2].Length - 1);
+                        }
+                        else { items[2] = "-"; }
+                        items[4] = cd.FindElement(By.CssSelector("div[data-testid='code']")).FindElement(By.CssSelector("span[class='attribute-value']")).Text;
+
+                        predmety.Add(new Subject(nameE, items[1], items[4], items[0], items[2], par, items[3]));
+                        pocet++;
+                        string printP = $"Paralelek: {pocet}/{elements.Count}";
+                        for (int j = 0; j < printP.Length; j++)
+                            Console.Write("\b");
+                        Console.Write(printP);
+
+                    }
                 }
             }
-            catch (Exception) { }
-            Debug.WriteLine(predmety.Count);
-            Console.WriteLine($"{i}/{ids.Count}");
+            catch (Exception ex) { Debug.WriteLine(ex.Message, "WebElement"); }
         }
 
         Debug.WriteLine(predmety.Count);
-        predmety.Sort((s1,s2) => s1.name.CompareTo(s2.name));
-        predmety.Sort((s1,s2) => s1.name.CompareTo(s2.name));
+        predmety.Sort((s1, s2) => s1.jmeno.CompareTo(s2.jmeno));
+        predmety.Sort((s1, s2) => s1.jmeno.CompareTo(s2.jmeno));
 
 
 
         bool end = false;
         string path = "";
-        Console.WriteLine("Konec programu, zadej příkaz: \n sel (po/út/st/čt/pá)\nprint\nend");
+        Console.WriteLine("Konec programu, zadej příkaz: \n sel (po/út/st/čt/pá)\nprint\nteacher (list/jmeno)\nend");
         while (!end)
         {
             var uInput = Console.ReadLine();
@@ -192,22 +253,25 @@ internal class Program
             {
                 case "sel":
                     string den = "po";
-                    if (command[1] == null)
+                    if (command.Length == 1)
                     {
                         Console.WriteLine("Dny:\t PO\t ÚT\t ST\t ČT\t PÁ");
                         den = Console.ReadLine();
-                        if (den == null)
-                            den = "po";
                     }
                     else
                     {
                         den = command[1];
                     }
-                    foreach(var predmet in predmety)
+                    foreach (var predmet in predmety)
                     {
                         if (den == null)
-                            return;
-                        if (predmet.time.StartsWith(den.ToLower()))
+                            break;
+                        if (den == "all")
+                        {
+                            Console.WriteLine(predmet.ToString());
+                            continue;
+                        }
+                        if (predmet.cas.Contains(den.ToLower()))
                             Console.WriteLine(predmet.ToString());
                     }
 
@@ -219,17 +283,34 @@ internal class Program
                     path = Console.ReadLine();
                     if (path == null)
                         path = "";
-                    File.WriteAllLines(path + "\\Rozvrh.csv", list);
-                    break;/*
-                case "parse":
-                    if (path.Length < 2)
-                        break;
-                    var linky = File.ReadAllText(path + "\\Rozvrh.csv");
-                    linky = linky.Replace("\n", "");
-                    linky = linky.Replace("\t", "");
-                    var itemS = linky.Split("|");
-                    File.WriteAllLines(path + "\\Rozvrh.csv", itemS);
-                    break;*/
+                    File.WriteAllLines(path + "\\Rozvrh.csv", list, Encoding.UTF8);
+                    break;
+                case "teacher":
+                    string uci = "";
+                    HashSet<string> ucitele = new HashSet<string>();
+                    if (command.Length == 1)
+                    {
+                        Console.WriteLine("list\t jmeno ucitele");
+                        uci = Console.ReadLine();
+                    }
+                    if (uci.Length < 1)
+                        uci = command[1];
+                    foreach (Subject predmet in predmety)
+                    {
+                        if (uci == "list")
+                        {
+                            ucitele.Add(predmet.uci);
+                            continue;
+                        }
+                        if (predmet.uci.Contains(uci))
+                            Console.WriteLine(predmet.ToString());
+                    }
+                    foreach (string u in ucitele)
+                        Console.WriteLine(u);
+                    break;
+                case "count":
+                    Console.WriteLine(predmety.Count);
+                    break;
                 case "end":
                     end = true;
                     break;
@@ -237,66 +318,38 @@ internal class Program
         }
         cd.Close();
         Console.Clear();
+        Console.WriteLine("Můžete zavřít okno");
     }
 
 }
 
-class Subject{
-    public string name;
-    public string time;
-    public string id;
-    public string type;
-    public string teacher;
-    public int parallel;
-    public Subject(string name, string time, string id, string type, string teacher, int parallel)
+class Subject
+{
+    public string jmeno;
+    public string cas;
+    public string ID;
+    public string typ;
+    public string uci;
+    public int par;
+    public string cap;
+    public Subject(string name, string time, string id, string type, string teacher, int parallel, string capacita)
     {
-        var pismenka = "a b c d e f g h i j k l m n o p q r s t u v w x y z ě š č ř ž ý á í é 0 1 2 3 4 5 6 7 8 9 ( ) ".Split(" ");
-        bool nameB = false;
-        bool timeB = false;
-        bool idB = false;
-        bool typeB = false;
-        bool teacherB = false;
-        foreach(string pismenko in pismenka)
-        {
-            if (!nameB)
-                nameB = name.EndsWith(pismenko);
-            if (!timeB)
-                timeB = time.EndsWith(pismenko);
-            if (!idB)
-                idB = id.ToLower().EndsWith(pismenko);
-            if (!typeB)
-                typeB = type.EndsWith(pismenko);
-            if (!teacherB)
-                teacherB = teacher.EndsWith(pismenko);
-        }
-        if (!nameB)
-            name = name.Remove(name.Length - 1);
-        if (!timeB)
-            time = time.Remove(name.Length - 1);
-        if (!idB)
-            id = id.Remove(name.Length - 1);
-        if (!typeB)
-            type = type.Remove(name.Length - 1);
-        if (!teacherB)
-            teacher = teacher.Remove(name.Length - 1);
-        this.name = name;
-        this.time = time;
-        this.id = id;
-        this.type = type;
-        this.teacher = teacher;
-        this.parallel = parallel;
-
+        jmeno = name;
+        cas = time;
+        ID = id;
+        typ = type;
+        uci = teacher;
+        par = parallel;
+        cap = capacita;
     }
 
     public string ToPrint()
     {
-        string temp = id + ";" + name.Replace(" ", "|") + ";" + time.Replace(" ", "|") + ";" + type + ";" + parallel + ";" + teacher.Replace(" ", "|") + ";";
-        temp = temp.Replace("\n", "").Replace("\t", "").Replace(" ", "");
-        return temp.Replace("|", " ");
+        return ID + ";" + jmeno + ";" + cas + ";" + typ + ";" + par.ToString() + ";" + uci + ";" + cap;
     }
 
     override public string ToString()
     {
-        return id + "\n" + name + "\n" + time + "\n" + type + "\n" + parallel + "\n" + teacher + "\n";
+        return ID + "\n" + jmeno + "\n" + cas + "\n" + typ + "\n" + par + "\n" + uci + "\n" + cap + "\n";
     }
 }
