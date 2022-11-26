@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\marek\\source\\repos\\ParallelReader\\ParallelReader\\ParallelReader.csproj": {}
+    "C:\\Users\\marek\\OneDrive\\Dokumenty\\GitHub\\ParallelReader\\ParallelReader\\ParallelReader.csproj": {}
   },
   "projects": {
-    "C:\\Users\\marek\\source\\repos\\ParallelReader\\ParallelReader\\ParallelReader.csproj": {
+    "C:\\Users\\marek\\OneDrive\\Dokumenty\\GitHub\\ParallelReader\\ParallelReader\\ParallelReader.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\marek\\source\\repos\\ParallelReader\\ParallelReader\\ParallelReader.csproj",
+        "projectUniqueName": "C:\\Users\\marek\\OneDrive\\Dokumenty\\GitHub\\ParallelReader\\ParallelReader\\ParallelReader.csproj",
         "projectName": "ParallelReader",
-        "projectPath": "C:\\Users\\marek\\source\\repos\\ParallelReader\\ParallelReader\\ParallelReader.csproj",
+        "projectPath": "C:\\Users\\marek\\OneDrive\\Dokumenty\\GitHub\\ParallelReader\\ParallelReader\\ParallelReader.csproj",
         "packagesPath": "C:\\Users\\marek\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\marek\\source\\repos\\ParallelReader\\ParallelReader\\obj\\",
+        "outputPath": "C:\\Users\\marek\\OneDrive\\Dokumenty\\GitHub\\ParallelReader\\ParallelReader\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"

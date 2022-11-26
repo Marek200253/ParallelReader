@@ -1,5 +1,4 @@
 ﻿
-// See https://aka.ms/new-console-template for more information
 using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
 using System.Diagnostics;
@@ -12,14 +11,34 @@ internal class Program
     {
         List<Subject> predmety = new List<Subject>();
         Console.WriteLine("Start!");
-        Console.WriteLine("Zadejte argumenty nebo zmáčkněte enter:");
+        Console.WriteLine("Zadejte argumenty nebo zmáčkněte enter: (? pro info)");
         string[] userData = { "", "" };
         string sem = "";
         int numero = 0;
+        bool developer = false;
         bool skip = false;
-        try //fast-start
+
+        StringBuilder stringBuilder = new StringBuilder();
+        bool reading = true;
+        char readerChar = '\r';
+
+        try //Argumenty
         {
             string argumenty = Console.ReadLine();
+            if (argumenty is null)
+                argumenty = "";
+            if (argumenty.Contains("?"))
+            {
+                Console.WriteLine("-u [přihlašovací jméno]\n" +
+                    "-p [přihlašovací heslo]\n" +
+                    "-b (testovací verze programu)\n" +
+                    "-s [semestr (typ: B-rok-pololetí; př: B221)]\n" +
+                    "-count [počet předmětů k vylistování]\n" +
+                    "-skip (program přeskočí přihlašování z konzole a počká na přihlášení v prohlížeči)");
+                argumenty = Console.ReadLine();
+                if (argumenty is null)
+                    argumenty = "";
+            }
             var argument = argumenty.Split("-");
             foreach (string arg in argument)
             {
@@ -34,6 +53,7 @@ internal class Program
                         break;
                     case "b": //test
                         numero = 30;
+                        developer = true;
                         break;
                     case "s": //semestr
                         sem = cmm[1];
@@ -49,67 +69,88 @@ internal class Program
         }
         catch (Exception) { }
 
-        ChromeDriver cd = new ChromeDriver();
+        ChromeOptions options = new ChromeOptions();
+        options.AcceptInsecureCertificates = false;
+        ChromeDriver cd = null;
+
+        try
+        {
+            cd = new ChromeDriver(options);
+        }
+        catch (Exception ex) { Console.WriteLine("\nChybná verze chromedriveru. Stáhněte správnou(v logu níže je specifikováno jakou) na https://chromedriver.storage.googleapis.com/index.html\n\n" + ex); return; }
         try
         {
             cd.Url = @"https://new.kos.cvut.cz/login";
             cd.Navigate();
-            if (skip)
+            try
             {
                 while (cd.Url == @"https://new.kos.cvut.cz/login")
-                    Thread.Sleep(1000);
-            }
-            else
-            {
-                Thread.Sleep(1000);
-                IWebElement e = cd.FindElement(By.Id("username"));
-                Console.Clear();
-                if (userData[0].Length < 3)
                 {
-                    Console.WriteLine("Zadejte přihlašovají jméno:");
-                    e.SendKeys(Console.ReadLine());
+                    if (skip)
+                    {
+                        Thread.Sleep(1000);
+                    }
+                    else
+                    {
+                        Thread.Sleep(1000);
+                        IWebElement e = cd.FindElement(By.Id("username"));
+                        if (!developer)
+                            Console.Clear();
+                        if (userData[0].Length < 3)
+                        {
+                            Console.WriteLine("Zadejte přihlašovají jméno:");
+                            string nameS = Console.ReadLine();
+                            if (nameS is null)
+                                nameS = "";
+                            e.SendKeys(nameS);
+                            userData[0] = nameS;
+                        }
+                        else { e.SendKeys(userData[0]); }
+                        e = cd.FindElement(By.Id("password"));
+                        if (userData[1].Length < 8)
+                        {
+                            Console.WriteLine("Heslo: ");
+                            for (int i = 0; i < 100; i++)
+                                e.SendKeys("\b");
+                            while (reading)
+                            {
+                                ConsoleKeyInfo newKey = Console.ReadKey(true);
+                                if ((newKey.Key == ConsoleKey.Backspace) || (newKey.Key == ConsoleKey.Delete))  //podmínka pro zobrazování *
+                                { Console.Write("\b"); }
+                                else { Console.Write("*"); }
+                                char passwordKey = newKey.KeyChar;
+                                if (passwordKey == readerChar)
+                                {
+                                    reading = false;
+                                }
+                                else
+                                {
+                                    stringBuilder.Append(passwordKey.ToString());
+                                }
+                            }
+                            e.SendKeys(stringBuilder.ToString());
+                            reading = true;
+                        }
+                        else { e.SendKeys(userData[1]); }
+                        if (!developer)
+                            Console.Clear();
+                        e = cd.FindElement(By.CssSelector("button[data-testid='button-login']"));
+                        e.Click();
+                        Thread.Sleep(1500);
+                    }
                 }
-                else { e.SendKeys(userData[0]); }
-                e = cd.FindElement(By.Id("password"));
-                if (userData[1].Length < 8)
-                {
-                    Console.WriteLine("Heslo:");
-                    e.SendKeys(Console.ReadLine());
-                }
-                else { e.SendKeys(userData[1]); }
-                Console.Clear();
-                e = cd.FindElement(By.CssSelector("button[data-testid='button-login']"));
-                e.Click();
             }
+            catch (Exception ex) { Debug.WriteLine("Chyba: " + ex, "Login"); }
         }
         catch (Exception ex)
         {
             Console.WriteLine("Chyba: " + ex.Message);
         }
-        Thread.Sleep(1500);
-        if (cd.Url == @"https://new.kos.cvut.cz/login")
-            try //druhý pokus
-            {
-                cd.Url = @"https://new.kos.cvut.cz/login";
-                cd.Navigate();
-                Thread.Sleep(1000);
-                IWebElement e = cd.FindElement(By.Id("username"));
-                Console.Clear();
-                Console.WriteLine("Zkuste to znovu\nZadejte přihlašovají jméno:");
-                e.SendKeys(Console.ReadLine());
-                e = cd.FindElement(By.Id("password"));
-                Console.WriteLine("Heslo:");
-                e.SendKeys(Console.ReadLine());
-                Console.Clear();
-                e = cd.FindElement(By.CssSelector("button[data-testid='button-login']"));
-                e.Click();
-                Thread.Sleep(1500);
-            }
-            catch (NoSuchElementException) { }
 
         if (cd.Url == @"https://new.kos.cvut.cz/login")
         {
             cd.Close();
+            Console.WriteLine("Přihlášení neproběhlo úspěšně, spusťe program znovu (zkuste argument -skip pro neomezený počet pokusů přihlášení v prohlížeči)");
             return;
         }
         Console.WriteLine("Přihlášen");
@@ -122,12 +163,53 @@ internal class Program
             string value = c.Value;
             cc.Add(new System.Net.Cookie(name, value, c.Path, c.Domain));
         }
-
         //Zapisování ID předmětů
         Thread.Sleep(1000);
         cd.Url = @"https://new.kos.cvut.cz/course-register";
         cd.Navigate();
         Thread.Sleep(1000);
+        try
+        {
+            IWebElement semesterSel = cd.FindElement(By.CssSelector("div[data-testid='select-semester']"));
+            IWebElement clickSem = semesterSel.FindElement(By.CssSelector("svg[class='svg-inline--fa fa-caret-down fa-lg multiselect__caret-icon']"));
+            clickSem.Click();
+            IList<IWebElement> dropListSem = semesterSel.FindElements(By.CssSelector("li[class='multiselect__element']"));
+            if (sem == "")//Zápis semestru pokud není definováno
+            {
+                string[] dropSemesters = new string[dropListSem.Count];
+                Console.WriteLine("Vyber semestr:");
+                for (int i = 0; i < dropListSem.Count; i++)
+                {
+                    Console.WriteLine(i + "." + dropListSem[i].Text);
+                    dropSemesters[i] = dropListSem[i].Text.Replace("&nbsp", "").Replace(" ", "");
+                }
+                int idSem = 0;
+                int.TryParse(Console.ReadLine(), out idSem);
+                if (idSem < dropSemesters.Length)
+                {
+                    var fText = dropSemesters[idSem].Split("-");
+                    foreach (string s in fText)
+                        if (s.StartsWith("B"))
+                        {
+                            sem = s;
+                            break;
+                        }
+                    //sem = fText[0];
+                    Console.WriteLine("Vybráno: " + sem);
+                }
+                if (sem is null)
+                    sem = "";
+            }
+            clickSem.Click();
+            foreach (IWebElement drop in dropListSem)
+            {
+                if (drop.Text.Contains(sem))
+                    drop.Click();
+            }
+            Thread.Sleep(1500);
+        }
+        catch (Exception) { }
+
         IWebElement element = cd.FindElement(By.TagName("html"));
         IList<IWebElement> nums = cd.FindElement(By.ClassName("pagination")).FindElements(By.ClassName("page-item"));
         foreach (IWebElement num in nums)//přepnutí na num 100
@@ -162,15 +244,6 @@ internal class Program
             page.Click();
             Thread.Sleep(5000);
         }
-
-        if (sem == "")
-        {
-            Console.WriteLine("Vyber semestr: B221 (B-Rok-pololetí)");
-            sem = Console.ReadLine().ToUpper();
-            if (sem is null)
-                sem = "B221";
-        }
-
         if (numero == 0)
             numero = ids.Count;
         //AutoReading
@@ -243,7 +316,7 @@ internal class Program
 
         bool end = false;
         string path = "";
-        Console.WriteLine("Konec programu, zadej příkaz: \n sel (po/út/st/čt/pá)\nprint\nteacher (list/jmeno)\nend");
+        Console.WriteLine("Konec programu, zadej příkaz: \n sel [po/út/st/čt/pá] - vypíše předměty v určitém dni\nprint - vyexportuje do souboru\nteacher [list/jméno učitele] - vypíše učitele/najde předměty, kde učí\nend");
         while (!end)
         {
             var uInput = Console.ReadLine();
@@ -334,13 +407,13 @@ class Subject
     public string cap;
     public Subject(string name, string time, string id, string type, string teacher, int parallel, string capacita)
     {
-        jmeno = name;
-        cas = time;
-        ID = id;
-        typ = type;
-        uci = teacher;
+        jmeno = name.Replace("&nbsp", "");
+        cas = time.Replace("&nbsp", "");
+        ID = id.Replace("&nbsp", "");
+        typ = type.Replace("&nbsp", "");
+        uci = teacher.Replace("&nbsp", "");
         par = parallel;
-        cap = capacita;
+        cap = capacita.Replace("&nbsp", "");
     }
 
     public string ToPrint()
