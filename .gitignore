@@ -5,3 +5,6 @@
 /ParallelReader/obj/Release/net6.0/win-x86
 /ParallelReader/bin/Release/net6.0/win-x86
 /ParallelReader/bin/Release/net6.0/publish/win-x86
+/ParallelReader/.vs
+/ParallelReader/obj
+/ParallelReader/Properties
