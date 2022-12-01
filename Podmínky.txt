@@ -1,0 +1,6 @@
+Stažením aplikace parallelreader souhlasíte s následujícími pěti body:
+1. Aplikaci používám pouze pro vlastní potřebu.
+2. Používáním aplikace nezpůsobuji v žádném případe ani sebemenší újmu straně poskytovatele služeb, která této aplikaci poskytuje data pro její běh.
+3. Aplikaci nepoužívám pro provedení DDOS ani jiného typu škodlivého útoku.
+4. Nesu plnou zodpovědnost za používání aplikace a zprošťuji zodpovědnosti všechny, co se podílí na vývoji této aplikace.
+5. Nebudu poskytovat nikomu kopie této aplikace bez souhlasu vývojářů.
