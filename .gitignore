@@ -1,0 +1,7 @@
+﻿################################################################################
+# Tento soubor .gitignore byl automaticky vytvořen aplikací Microsoft(R) Visual Studio.
+################################################################################
+
+/ParallelReader/obj/Release/net6.0/win-x86
+/ParallelReader/bin/Release/net6.0/win-x86
+/ParallelReader/bin/Release/net6.0/publish/win-x86

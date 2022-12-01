@@ -1,6 +1,10 @@
 ﻿
 using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
+using OpenQA.Selenium.DevTools.V102.Debugger;
+using OpenQA.Selenium.Edge;
+using OpenQA.Selenium.Firefox;
+using OpenQA.Selenium.Interactions;
 using System.Diagnostics;
 using System.Net;
 using System.Text;
@@ -9,20 +13,24 @@ internal class Program
 {
     private static void Main(string[] args)
     {
+    //Proměnné
         List<Subject> predmety = new List<Subject>();
-        Console.WriteLine("Start!");
-        Console.WriteLine("Zadejte argumenty nebo zmáčkněte enter: (? pro info)");
         string[] userData = { "", "" };
         string sem = "";
         int numero = 0;
         bool developer = false;
+        bool allView = false;
         bool skip = false;
+        bool nextTry = false;
+        List<string> vFakulty= new List<string>();
+        IWebDriver cd;
+        List<char> alphabeth = new List<char>(("aábcčdďeéěfghiíjklnňmoópqrřsštťuúůvwxyýzž").ToCharArray());
 
-        StringBuilder stringBuilder = new StringBuilder();
-        bool reading = true;
-        char readerChar = '\r';
-
-        try //Argumenty
+        Console.WriteLine("Start!");
+        Console.WriteLine("Zadejte argumenty nebo zmáčkněte enter: (? pro info)");
+    
+    //Argumenty
+        try 
         {
             string argumenty = Console.ReadLine();
             if (argumenty is null)
@@ -33,15 +41,20 @@ internal class Program
                     "-p [přihlašovací heslo]\n" +
                     "-b (testovací verze programu)\n" +
                     "-s [semestr (typ: B-rok-pololetí; př: B221)]\n" +
+                    "-v [1-chrome; 2-Edge; 3-Firefox]\n" +
                     "-count [počet předmětů k vylistování]\n" +
-                    "-skip (program přeskočí přihlašování z konzole a počká na přihlášení v prohlížeči)");
+                    "-skip (program přeskočí přihlašování z konzole a počká na přihlášení v prohlížeči)\n" +
+                    "-f [aábcčdďeéěfghiíjklnňmoópqrřsštťuúůvwxyýzž] (výběr počátečního písmena)\n" +
+                    "-t [aábcčdďeéěfghiíjklnňmoópqrřsštťuúůvwxyýzž] (výběr závěrečného písmena)");
                 argumenty = Console.ReadLine();
                 if (argumenty is null)
                     argumenty = "";
             }
             var argument = argumenty.Split("-");
+            bool[] finish = { false, false };
             foreach (string arg in argument)
             {
+                List<char> tempAlph = new List<char>();
                 var cmm = arg.Split(" ");
                 switch (cmm[0])
                 {
@@ -54,6 +67,40 @@ internal class Program
                     case "b": //test
                         numero = 30;
                         developer = true;
+                        Console.WriteLine("Vstupujete do testovacího módu");
+                        break;
+                    case "d": //developer - odemiká rozšířený pohled
+                        developer = true;
+                        allView = true;
+                        Console.WriteLine("Vstupujete do vývojářského módu");
+                        break;
+                    case "from": //Od tohoto písmene začne počítání předmětů
+                        char fromSel = new char();
+                        char.TryParse(cmm[1], out fromSel);
+                        alphabeth.Reverse();
+                        foreach(char c in alphabeth)
+                        {
+                            if (!finish[0])
+                            {
+                                finish[0] = c.Equals(fromSel);
+                                tempAlph.Add(c);
+                            }
+                        }
+                        alphabeth = tempAlph;
+                        alphabeth.Reverse();
+                        break;
+                    case "to": //Do tohoto písmene se počítají předměty
+                        char toSel = new char();
+                        char.TryParse(cmm[1], out toSel);
+                        foreach (char c in alphabeth)
+                        {
+                            if (!finish[1])
+                            {
+                                finish[1] = c.Equals(toSel);
+                                tempAlph.Add(c);
+                            }
+                        }
+                        alphabeth = tempAlph;
                         break;
                     case "s": //semestr
                         sem = cmm[1];
@@ -67,95 +114,178 @@ internal class Program
                 }
             }
         }
-        catch (Exception) { }
+        catch (Exception ex) { Debug.WriteLine(ex, "arguments"); }
 
-        ChromeOptions options = new ChromeOptions();
-        options.AcceptInsecureCertificates = false;
-        ChromeDriver cd = null;
-
-        try
-        {
-            cd = new ChromeDriver(options);
-        }
-        catch (Exception ex) { Console.WriteLine("\nChybná verze chromedriveru. Stáhněte správnou(v logu níže je specifikováno jakou) na https://chromedriver.storage.googleapis.com/index.html\n\n" + ex); return; }
-        try
-        {
-            cd.Url = @"https://new.kos.cvut.cz/login";
-            cd.Navigate();
-            try
+        //Otevření okna prohlížeče
+        Console.WriteLine("Vyberte prohlížeč: (výchozí: Chrome)\n" +
+            "1. Google Chrome\n" +
+            "2. MS Edge\n" +
+            "3. Firefox");
+        string uBrow = Console.ReadLine();
+        try {
+            switch (uBrow)
             {
-                while (cd.Url == @"https://new.kos.cvut.cz/login")
-                {
-                    if (skip)
+                case "2":
+                    EdgeDriverService eDService = EdgeDriverService.CreateDefaultService();
+                    EdgeOptions eOptions = new EdgeOptions();
+                    eOptions.AcceptInsecureCertificates = false;
+                    eOptions.PageLoadStrategy = PageLoadStrategy.Normal;
+                    if (!allView)
                     {
-                        Thread.Sleep(1000);
+                        eDService.EnableVerboseLogging = false;
+                        eDService.SuppressInitialDiagnosticInformation = true;
+                        eDService.HideCommandPromptWindow = true;
+                        if(!skip)
+                            eOptions.AddArgument("--headless");
+                        eOptions.AddArgument("--no-sandbox");
+                        eOptions.AddArgument("--disable-gpu");
+                        eOptions.AddArgument("--disable-crash-reporter");
+                        eOptions.AddArgument("--disable-extensions");
+                        eOptions.AddArgument("--disable-in-process-stack-traces");
+                        eOptions.AddArgument("--disable-logging");
+                        eOptions.AddArgument("--disable-dev-shm-usage");
+                        eOptions.AddArgument("--log-level=3");
+                        eOptions.AddArgument("--output=/dev/null");
                     }
-                    else
+                    cd = new EdgeDriver(eDService, eOptions);
+                    break;
+                case "3":
+                    FirefoxDriverService fDService = FirefoxDriverService.CreateDefaultService();
+                    FirefoxOptions fOptions = new FirefoxOptions();
+                    fOptions.AcceptInsecureCertificates = false;
+                    fOptions.PageLoadStrategy = PageLoadStrategy.Normal;
+                    if (!allView)
                     {
-                        Thread.Sleep(1000);
-                        IWebElement e = cd.FindElement(By.Id("username"));
-                        if (!developer)
-                            Console.Clear();
+                        fDService.SuppressInitialDiagnosticInformation = true;
+                        fDService.HideCommandPromptWindow = true;
+                        if (!skip)
+                            fOptions.AddArgument("--headless");
+                        fOptions.AddArgument("--no-sandbox");
+                        fOptions.AddArgument("--disable-gpu");
+                        fOptions.AddArgument("--disable-crash-reporter");
+                        fOptions.AddArgument("--disable-extensions");
+                        fOptions.AddArgument("--disable-in-process-stack-traces");
+                        fOptions.AddArgument("--disable-logging");
+                        fOptions.AddArgument("--disable-dev-shm-usage");
+                        fOptions.AddArgument("--log-level=3");
+                        fOptions.AddArgument("--output=/dev/null");
+                    }
+                    cd = new FirefoxDriver(fDService, fOptions);
+                    break;
+                default:
+                    ChromeDriverService cDService = ChromeDriverService.CreateDefaultService();
+                    ChromeOptions cOptions = new ChromeOptions();
+                    cOptions.AcceptInsecureCertificates = false;
+                    cOptions.PageLoadStrategy = PageLoadStrategy.Normal;
+                    if (!allView)
+                    {
+                        cDService.EnableVerboseLogging = false;
+                        cDService.SuppressInitialDiagnosticInformation = true;
+                        cDService.HideCommandPromptWindow = true;
+                        if (!skip)
+                            cOptions.AddArgument("--headless");
+                        cOptions.AddArgument("--no-sandbox");
+                        cOptions.AddArgument("--disable-gpu");
+                        cOptions.AddArgument("--disable-crash-reporter");
+                        cOptions.AddArgument("--disable-extensions");
+                        cOptions.AddArgument("--disable-in-process-stack-traces");
+                        cOptions.AddArgument("--disable-logging");
+                        cOptions.AddArgument("--disable-dev-shm-usage");
+                        cOptions.AddArgument("--log-level=3");
+                        cOptions.AddArgument("--output=/dev/null");
+                    }
+                    cd = new ChromeDriver(cDService, cOptions);
+                    break;
+            }
+            
+        }
+        catch (Exception ex) { Console.WriteLine("\nChybná verze webdriveru k prohlížeči (nebo prohlížeče). Stáhněte nebo vyberte správnou\n\n" + ex); return; }
+
+    //Přihlášení do aplikace
+        cd.Navigate().GoToUrl(@"https://new.kos.cvut.cz/login");
+        string nameS = "";
+        try
+        {
+            while (cd.Url == @"https://new.kos.cvut.cz/login")
+            {
+                if (skip)
+                {
+                    Thread.Sleep(1000);
+                }
+                else
+                {
+                    Thread.Sleep(1000);
+                    IWebElement e = cd.FindElement(By.Id("username"));
+                    if (!developer)
+                        Console.Clear();
+                    if (!nextTry)
+                    {
+
                         if (userData[0].Length < 3)
                         {
+                            for (int i = 0; i < 50; i++)
+                                e.SendKeys("\b");
                             Console.WriteLine("Zadejte přihlašovají jméno:");
-                            string nameS = Console.ReadLine();
+                            nameS = Console.ReadLine();
                             if (nameS is null)
                                 nameS = "";
                             e.SendKeys(nameS);
-                            userData[0] = nameS;
+                            nextTry = true;
                         }
-                        else { e.SendKeys(userData[0]); }
-                        e = cd.FindElement(By.Id("password"));
-                        if (userData[1].Length < 8)
+                        else { nameS = userData[0]; nextTry = true; e.SendKeys(userData[0]); }
+                    }
+                    else
+                    {
+                        Console.WriteLine("Špatně zadané údaje!\nUživatel: " + nameS);
+                    }
+                    e = cd.FindElement(By.Id("password"));
+                    if (userData[1].Length < 8)
+                    {
+                        StringBuilder stringBuilder = new StringBuilder();
+                        Console.WriteLine("Heslo: ");
+                        for (int i = 0; i < 50; i++)
+                            e.SendKeys("\b");
+                        while (true)
                         {
-                            Console.WriteLine("Heslo: ");
-                            for (int i = 0; i < 100; i++)
-                                e.SendKeys("\b");
-                            while (reading)
+                            ConsoleKeyInfo newKey = Console.ReadKey(true);
+                            char passwordKey = newKey.KeyChar;
+                            if(newKey.Key == ConsoleKey.Backspace)
+                            { nextTry = false; }
+                            if (newKey.Key == ConsoleKey.Enter)
                             {
-                                ConsoleKeyInfo newKey = Console.ReadKey(true);
-                                if ((newKey.Key == ConsoleKey.Backspace) || (newKey.Key == ConsoleKey.Delete))  //podmínka pro zobrazování *
+                                break;
+                            }
+                            else
+                            {
+                                if ((newKey.Key == ConsoleKey.Backspace) || (newKey.Key == ConsoleKey.Delete))  //podmínka pro zobrazování "*" místo znaků
                                 { Console.Write("\b"); }
                                 else { Console.Write("*"); }
-                                char passwordKey = newKey.KeyChar;
-                                if (passwordKey == readerChar)
-                                {
-                                    reading = false;
-                                }
-                                else
-                                {
-                                    stringBuilder.Append(passwordKey.ToString());
-                                }
+                                stringBuilder.Append(passwordKey.ToString());
                             }
-                            e.SendKeys(stringBuilder.ToString());
-                            reading = true;
                         }
-                        else { e.SendKeys(userData[1]); }
-                        if (!developer)
-                            Console.Clear();
-                        e = cd.FindElement(By.CssSelector("button[data-testid='button-login']"));
-                        e.Click();
-                        Thread.Sleep(1500);
+                        e.SendKeys(stringBuilder.ToString());
                     }
+                    else { e.SendKeys(userData[1]); }
+                    if (!developer)
+                        Console.Clear();
+                    e = cd.FindElement(By.CssSelector("button[data-testid='button-login']"));
+                    e.Click();
+                    Thread.Sleep(1500);
                 }
             }
-            catch (Exception ex) { Debug.WriteLine("Chyba: " + ex, "Login"); }
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine("Chyba: " + ex.Message);
-        }
+        catch (Exception ex) { Debug.WriteLine("Chyba: " + ex, "Login"); }
 
+    //Nedosažitelná výjimka
         if (cd.Url == @"https://new.kos.cvut.cz/login")
         {
             cd.Close();
             Console.WriteLine("Přihlášení neproběhlo úspěšně, spusťe program znovu (zkuste argument -skip pro neomezený počet pokusů přihlášení v prohlížeči)");
             return;
         }
-        Console.WriteLine("Přihlášen");
+        Console.WriteLine("\nPřihlášen jako uživatel: " + nameS);
 
-        //Cookies
+    //Cookies
         CookieContainer cc = new CookieContainer();
         foreach (OpenQA.Selenium.Cookie c in cd.Manage().Cookies.AllCookies)
         {
@@ -163,25 +293,26 @@ internal class Program
             string value = c.Value;
             cc.Add(new System.Net.Cookie(name, value, c.Path, c.Domain));
         }
-        //Zapisování ID předmětů
         Thread.Sleep(1000);
         cd.Url = @"https://new.kos.cvut.cz/course-register";
         cd.Navigate();
         Thread.Sleep(1000);
+
+    //Zápis semestru (pokud není předdefinováno)
         try
         {
             IWebElement semesterSel = cd.FindElement(By.CssSelector("div[data-testid='select-semester']"));
             IWebElement clickSem = semesterSel.FindElement(By.CssSelector("svg[class='svg-inline--fa fa-caret-down fa-lg multiselect__caret-icon']"));
             clickSem.Click();
-            IList<IWebElement> dropListSem = semesterSel.FindElements(By.CssSelector("li[class='multiselect__element']"));
-            if (sem == "")//Zápis semestru pokud není definováno
+            IList<IWebElement> semesterList = semesterSel.FindElement(By.CssSelector("ul[class='multiselect__content']")).FindElements(By.CssSelector("li[class='multiselect__element']"));
+            if (sem == "")
             {
-                string[] dropSemesters = new string[dropListSem.Count];
+                string[] dropSemesters = new string[semesterList.Count];
                 Console.WriteLine("Vyber semestr:");
-                for (int i = 0; i < dropListSem.Count; i++)
+                for (int i = 0; i < semesterList.Count; i++)
                 {
-                    Console.WriteLine(i + "." + dropListSem[i].Text);
-                    dropSemesters[i] = dropListSem[i].Text.Replace("&nbsp", "").Replace(" ", "");
+                    Console.WriteLine($"{i}. {semesterList[i].Text}");
+                    dropSemesters[i] = semesterList[i].Text.Replace("&nbsp", "").Replace(" ", "");
                 }
                 int idSem = 0;
                 int.TryParse(Console.ReadLine(), out idSem);
@@ -194,14 +325,13 @@ internal class Program
                             sem = s;
                             break;
                         }
-                    //sem = fText[0];
                     Console.WriteLine("Vybráno: " + sem);
                 }
                 if (sem is null)
                     sem = "";
             }
             clickSem.Click();
-            foreach (IWebElement drop in dropListSem)
+            foreach (IWebElement drop in semesterList)
             {
                 if (drop.Text.Contains(sem))
                     drop.Click();
@@ -210,6 +340,40 @@ internal class Program
         }
         catch (Exception) { }
 
+    //Část pro výběr fakulty
+        Console.WriteLine("Přejete si vybrat fakultu? [Y/N]");
+        if (Console.ReadLine().ToLower() == "y")
+        {
+            try
+            {
+                IWebElement facultySel = cd.FindElement(By.CssSelector("div[data-testid='select-faculty']"));
+                IWebElement clickFac = facultySel.FindElement(By.CssSelector("svg[class='svg-inline--fa fa-caret-down fa-lg multiselect__caret-icon']"));
+                clickFac.Click();
+                IList<IWebElement> facultyList = facultySel.FindElement(By.CssSelector("ul[class='multiselect__content']")).FindElements(By.CssSelector("li[class='multiselect__element']"));
+
+                string[] facultyFL = new string[facultyList.Count];
+                Console.WriteLine("Vyberte fakultu: (pro vybrání více použijte čárky mezi čísly)");
+                for(int i = 0; i < facultyList.Count; i++)
+                {
+                    Console.WriteLine($"{i}. {facultyList[i].Text}");
+                    facultyFL[i] = facultyList[i].Text.Replace("&nbsp", "").Replace(" ", "");
+                }
+                string selFacults = Console.ReadLine();
+                if (selFacults is null)
+                    throw new Exception("Fakulta nevybrána");
+                if(selFacults.Length <= 0)
+                    throw new Exception("Fakulta nevybrána");
+                string[] sFakulty = selFacults.Split(",");
+                foreach(string faculty in sFakulty)
+                {
+                    //////<-----------------------------Zde chybí kód :)
+                }
+
+            }
+            catch (Exception) { }
+        }
+
+    //Zapisování ID předmětů
         IWebElement element = cd.FindElement(By.TagName("html"));
         IList<IWebElement> nums = cd.FindElement(By.ClassName("pagination")).FindElements(By.ClassName("page-item"));
         foreach (IWebElement num in nums)//přepnutí na num 100
@@ -233,6 +397,7 @@ internal class Program
         List<string> ids = new List<string>();
         foreach (var page in pages)
         {
+            // <-------------------------------- Sem naimlplementovat from-to (je potřeb změnit zapisování id kvůli listování a separování - změnit na tr)
             IList<IWebElement> subjects = cd.FindElement(By.TagName("tbody")).FindElements(By.CssSelector("a[class='link-room text-nowrap']"));
             foreach (IWebElement subject in subjects)
                 ids.Add(subject.Text);
@@ -246,7 +411,8 @@ internal class Program
         }
         if (numero == 0)
             numero = ids.Count;
-        //AutoReading
+
+    //AutoReading
         for (int i = 0; i < numero; i++)
         {
             cd.Url = @$"https://new.kos.cvut.cz/course-syllabus/{ids[i]}/{sem}";
@@ -294,8 +460,7 @@ internal class Program
                         }
                         else { items[2] = "-"; }
                         items[4] = cd.FindElement(By.CssSelector("div[data-testid='code']")).FindElement(By.CssSelector("span[class='attribute-value']")).Text;
-
-                        predmety.Add(new Subject(nameE, items[1], items[4], items[0], items[2], par, items[3]));
+                        predmety.Add(new Subject(nameE, items[1], items[4], items[0], items[2], par, items[3], "")); //<<---------------Chybí specifikace fakulty
                         pocet++;
                         string printP = $"Paralelek: {pocet}/{elements.Count}";
                         for (int j = 0; j < printP.Length; j++)
@@ -313,18 +478,24 @@ internal class Program
         predmety.Sort((s1, s2) => s1.jmeno.CompareTo(s2.jmeno));
 
 
-
+    //Konec programu - uživatelské funkce
         bool end = false;
         string path = "";
-        Console.WriteLine("Konec programu, zadej příkaz: \n sel [po/út/st/čt/pá] - vypíše předměty v určitém dni\nprint - vyexportuje do souboru\nteacher [list/jméno učitele] - vypíše učitele/najde předměty, kde učí\nend");
+        Console.WriteLine("\n\nKonec programu, zadej příkaz:" +
+            "\nlist [po/út/st/čt/pá] - vypíše předměty v určitém dni" +
+            "\nprint - vyexportuje do souboru" +
+            "\nteacher [list/jméno učitele] - vypíše učitele/najde předměty, kde učí" +
+            "\nend");
+
         while (!end)
+
         {
             var uInput = Console.ReadLine();
             if (uInput is null) continue;
             var command = uInput.Split(" ");
             switch (command[0])
             {
-                case "sel":
+                case "list":
                     string den = "po";
                     if (command.Length == 1)
                     {
@@ -363,7 +534,7 @@ internal class Program
                     HashSet<string> ucitele = new HashSet<string>();
                     if (command.Length == 1)
                     {
-                        Console.WriteLine("list\t jmeno ucitele");
+                        Console.WriteLine("list / jmeno učitele");
                         uci = Console.ReadLine();
                     }
                     if (uci.Length < 1)
@@ -405,7 +576,8 @@ class Subject
     public string uci;
     public int par;
     public string cap;
-    public Subject(string name, string time, string id, string type, string teacher, int parallel, string capacita)
+    public string fak;
+    public Subject(string name, string time, string id, string type, string teacher, int parallel, string capacita, string fakulta)
     {
         jmeno = name.Replace("&nbsp", "");
         cas = time.Replace("&nbsp", "");
@@ -414,15 +586,16 @@ class Subject
         uci = teacher.Replace("&nbsp", "");
         par = parallel;
         cap = capacita.Replace("&nbsp", "");
+        fak = fakulta.Replace("&nbsp", "");
     }
 
     public string ToPrint()
     {
-        return ID + ";" + jmeno + ";" + cas + ";" + typ + ";" + par.ToString() + ";" + uci + ";" + cap;
+        return ID + ";" + jmeno + ";" + cas + ";" + typ + ";" + par.ToString() + ";" + uci + ";" + cap + ";" + fak;
     }
 
     override public string ToString()
     {
-        return ID + "\n" + jmeno + "\n" + cas + "\n" + typ + "\n" + par + "\n" + uci + "\n" + cap + "\n";
+        return ID + "\n" + jmeno + "\n" + cas + "\n" + typ + "\n" + par + "\n" + uci + "\n" + cap + "\n" + fak + "\n";
     }
 }
